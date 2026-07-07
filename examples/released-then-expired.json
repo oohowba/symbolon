@@ -1,0 +1,72 @@
+{
+  "spec_version": "0.1",
+  "receipt_id": "sym_released01",
+  "issuer": {
+    "name": "Formosa Charter Tours Co., Ltd.",
+    "id": "https://tours.example.tw",
+    "license": "TQAA Travel Agency No. 1234",
+    "key_url": "https://tours.example.tw/.well-known/symbolon.json"
+  },
+  "principal_ref": "cust-ref-7f3a",
+  "agent": {
+    "id": "urn:agent:claude",
+    "on_behalf_of": "principal"
+  },
+  "commitment": {
+    "amount_decimal": "1000.00",
+    "currency": "TWD",
+    "terms_url": "https://tours.example.tw/planning-fee-terms",
+    "expires_at": "2026-06-01T00:00:00Z",
+    "payment_reference": {
+      "type": "manual_transfer",
+      "ref": "TXN-20260707-001"
+    }
+  },
+  "events": [
+    {
+      "seq": 1,
+      "type": "intent.quote_requested",
+      "at": "2026-03-01T03:00:00Z",
+      "actor": "agent",
+      "prev_hash": null,
+      "detail": {
+        "inquiry_ref": "inq_045"
+      },
+      "hash": "sha256:52714c91a13519addd2a69ee1b196062c7b2f9b03a3b5064f72d9a65dc5b5583",
+      "sig": "ed25519:V65AAAwShhkXYhFp05W1Q142S6Cqo9wqDE5lXgSVLtPg+p9VpH5Ayx+gyb/pRj4NmnIwkLczTavP9pUPP+0BCw=="
+    },
+    {
+      "seq": 2,
+      "type": "commitment.charged",
+      "at": "2026-03-02T05:00:00Z",
+      "actor": "issuer",
+      "prev_hash": "sha256:52714c91a13519addd2a69ee1b196062c7b2f9b03a3b5064f72d9a65dc5b5583",
+      "hash": "sha256:dc1fe0a61d2d5873a1fc606bf1d9f2beb60d8a0c3ba0875e646964ef50edea51",
+      "sig": "ed25519:/xSl+NMoIpbfG86JnJTj5vp5oynr5dYXv3eKNSve12P1dSMzFL11taWUmN0X8Xk08p/wSwkzHzGAECPziwf4Cw=="
+    },
+    {
+      "seq": 3,
+      "type": "commitment.reserved",
+      "at": "2026-03-10T09:00:00Z",
+      "actor": "issuer",
+      "prev_hash": "sha256:dc1fe0a61d2d5873a1fc606bf1d9f2beb60d8a0c3ba0875e646964ef50edea51",
+      "detail": {
+        "quote_ref": "Q-20260310-1002"
+      },
+      "hash": "sha256:f73b320a399ef3f63e0e4a03cd40e7fe38d48942720a69987a80282fb8aafae1",
+      "sig": "ed25519:BP27ehpZRQqulf5AOD/YedBv/ko2d8Xnk9JXogMmNVzN8SzRblAPUpixj+xKy8RuEKpfN3t1GV8syGlrcfacCA=="
+    },
+    {
+      "seq": 4,
+      "type": "commitment.released",
+      "at": "2026-03-12T01:00:00Z",
+      "actor": "issuer",
+      "prev_hash": "sha256:f73b320a399ef3f63e0e4a03cd40e7fe38d48942720a69987a80282fb8aafae1",
+      "detail": {
+        "reason": "quote declined"
+      },
+      "hash": "sha256:d127bb4414adf38f8d70dc7541fdba6b591f122b894216f8351c5822129b095d",
+      "sig": "ed25519:wVp6y2qon1/jatRk9ONXx9PiW5XfHZDGiyRzHZgFBMkHkOMjJaG5RgXKj9BNmHIW5pxjSiQ23U3gikJv9F1SBQ=="
+    }
+  ]
+}

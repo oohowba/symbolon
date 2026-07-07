@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Symbolon Verifier — Agent Commitment Receipts</title>
+<style>
+  :root { --bg:#0b0e14; --panel:#11151f; --line:#1e2532; --txt:#d7dce6; --dim:#7d8799;
+          --accent:#5eead4; --pass:#4ade80; --fail:#f87171; --skip:#6b7280; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font:15px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .wrap { max-width:920px; margin:0 auto; padding:40px 20px 80px; }
+  h1 { font-size:26px; margin:0; letter-spacing:.5px; }
+  h1 .sigil { color:var(--accent); }
+  .story { color:var(--dim); font-size:13px; margin:8px 0 32px; font-style:italic; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:720px){ .grid { grid-template-columns:1fr; } }
+  label { display:block; font-size:12px; color:var(--dim); text-transform:uppercase;
+          letter-spacing:1px; margin-bottom:6px; }
+  textarea { width:100%; height:260px; background:var(--panel); color:var(--txt);
+             border:1px solid var(--line); border-radius:8px; padding:12px;
+             font:12px/1.5 ui-monospace,Menlo,monospace; resize:vertical; }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  .row { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; }
+  button { background:var(--accent); color:#04211c; border:none; border-radius:8px;
+           padding:10px 22px; font:600 14px ui-monospace,Menlo,monospace; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button:hover { filter:brightness(1.15); }
+  #steps { margin-top:28px; }
+  .step { display:flex; gap:12px; padding:10px 14px; border:1px solid var(--line);
+          border-radius:8px; margin-bottom:8px; background:var(--panel); font-size:13px; }
+  .v { width:44px; font-weight:700; flex-shrink:0; }
+  .v.PASS { color:var(--pass); } .v.FAIL { color:var(--fail); } .v.SKIP { color:var(--skip); }
+  #verdict { margin-top:18px; padding:16px; border-radius:10px; font-size:16px; font-weight:700;
+             display:none; }
+  #verdict.ok { display:block; background:#052e1e; color:var(--pass); border:1px solid #14532d; }
+  #verdict.bad { display:block; background:#2e0808; color:var(--fail); border:1px solid #7f1d1d; }
+  .foot { margin-top:48px; color:var(--dim); font-size:12px; }
+  .foot a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="sigil">◗◖</span> Symbolon Verifier</h1>
+  <p class="story">In ancient Greece, two parties broke a token — a σύμβολον — and each kept half.
+  A match of the halves proved the bond. Paste a commitment receipt below; if the halves match, the history is true.</p>
+
+  <div class="grid">
+    <div>
+      <label>Commitment receipt (JSON)</label>
+      <textarea id="receipt" spellcheck="false" placeholder='{"spec_version":"0.1", …}'></textarea>
+    </div>
+    <div>
+      <label>Issuer well-known document (JSON)</label>
+      <textarea id="wk" spellcheck="false" placeholder='{"spec_version":"0.1","keys":[…]}'></textarea>
+    </div>
+  </div>
+  <div class="row">
+    <button id="go">Verify</button>
+    <button id="fetchkey" class="ghost">Fetch issuer keys from key_url</button>
+    <button id="demo-ok" class="ghost">Demo: valid receipt</button>
+    <button id="demo-bad" class="ghost">Demo: tampered receipt</button>
+  </div>
+  <div id="steps"></div>
+  <div id="verdict"></div>
+  <p class="foot">Symbolon v0.1 — verifies issuer-attested receipt history only; not payment finality,
+  identity, enforceability, or disputes. Runs entirely in your browser (WebCrypto); nothing is uploaded.
+  Spec: <a href="../spec.md">spec.md</a> · License: CC0</p>
+</div>
+
+<script>
+const EVENT_TYPES = ['intent.quote_requested','commitment.charged','commitment.reserved','commitment.redeemed','commitment.released'];
+
+function jcs(v){
+  if (v===null || typeof v==='boolean' || typeof v==='string') return JSON.stringify(v);
+  if (typeof v==='number'){ if(!Number.isInteger(v)) throw new Error('floats are prohibited'); return JSON.stringify(v); }
+  if (Array.isArray(v)) return '['+v.map(jcs).join(',')+']';
+  return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+jcs(v[k])).join(',')+'}';
+}
+const enc = new TextEncoder();
+async function sha256hex(bytes){
+  const d = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function b64ToBytes(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)); }
+function concatBytes(a,b){ const out=new Uint8Array(a.length+b.length); out.set(a); out.set(b,a.length); return out; }
+const assert = (cond,msg)=>{ if(!cond) throw new Error(msg); };
+
+function renderStep(name, verdict, note){
+  const el=document.createElement('div'); el.className='step';
+  el.innerHTML=`<span class="v ${verdict}">${verdict}</span><span>${name}${note?' — '+note:''}</span>`;
+  document.getElementById('steps').appendChild(el);
+}
+function renderVerdict(ok,msg){
+  const v=document.getElementById('verdict');
+  v.className=ok?'ok':'bad'; v.textContent=msg;
+}
+
+async function verify(){
+  document.getElementById('steps').innerHTML='';
+  document.getElementById('verdict').className='';
+  let failed=false, effectiveState=null, receipt, wk;
+  async function step(name, fn){
+    if (failed){ renderStep(name,'SKIP','previous step failed'); return; }
+    try { const note = await fn(); renderStep(name,'PASS',note||''); }
+    catch(e){ failed=true; renderStep(name,'FAIL',e.message); }
+  }
+
+  try { receipt = JSON.parse(document.getElementById('receipt').value); }
+  catch { renderStep('parse receipt','FAIL','not valid JSON'); renderVerdict(false,'INVALID (fail-closed)'); return; }
+  try { wk = JSON.parse(document.getElementById('wk').value); }
+  catch { renderStep('parse well-known','FAIL','not valid JSON — paste it or use "Fetch issuer keys"'); renderVerdict(false,'INVALID (fail-closed)'); return; }
+
+  await step('1 schema', async ()=>{
+    assert(receipt.spec_version==='0.1','spec_version must be "0.1"');
+    assert(/^sym_[a-z0-9]{6,64}$/.test(receipt.receipt_id??''),'bad receipt_id');
+    const iss=receipt.issuer??{};
+    assert(typeof iss.name==='string'&&iss.name.length>=1,'issuer.name required');
+    assert(/^https:\/\//.test(iss.id??''),'issuer.id must be https URL');
+    assert(/^https:\/\//.test(iss.key_url??''),'issuer.key_url must be https URL');
+    assert(new URL(iss.key_url).origin===new URL(iss.id).origin,'key_url must be same-origin with issuer.id');
+    assert(typeof receipt.principal_ref==='string'&&receipt.principal_ref.length>=1,'principal_ref required');
+    assert(receipt.agent?.on_behalf_of==='principal','agent.on_behalf_of must be "principal"');
+    const c=receipt.commitment??{};
+    assert(/^[0-9]+(\.[0-9]{1,4})?$/.test(c.amount_decimal??''),'bad amount_decimal');
+    assert(/^[A-Z]{3}$/.test(c.currency??''),'bad currency');
+    assert(!Number.isNaN(Date.parse(c.expires_at??'')),'bad expires_at');
+    assert(typeof c.payment_reference?.type==='string'&&typeof c.payment_reference?.ref==='string','payment_reference {type, ref} required');
+    assert(Array.isArray(receipt.events)&&receipt.events.length>=1&&receipt.events.length<=64,'events must be 1..64');
+    receipt.events.forEach((ev,i)=>{
+      assert(ev.seq===i+1,`event ${i+1}: seq must be consecutive`);
+      assert(EVENT_TYPES.includes(ev.type),`event ${i+1}: unknown type ${ev.type}`);
+      assert(['agent','principal','issuer'].includes(ev.actor),`event ${i+1}: bad actor`);
+      assert(!Number.isNaN(Date.parse(ev.at??'')),`event ${i+1}: bad at`);
+      assert(i===0?ev.prev_hash===null:/^sha256:[0-9a-f]{64}$/.test(ev.prev_hash??''),`event ${i+1}: bad prev_hash`);
+      assert(/^sha256:[0-9a-f]{64}$/.test(ev.hash??''),`event ${i+1}: bad hash`);
+      assert(/^ed25519:[A-Za-z0-9+/]+={0,2}$/.test(ev.sig??''),`event ${i+1}: bad sig`);
+    });
+    return `${receipt.events.length} events`;
+  });
+
+  await step('2 hash chain', async ()=>{
+    let prev=null;
+    for (const [i,ev] of receipt.events.entries()){
+      assert(ev.prev_hash===prev,`event ${i+1}: prev_hash mismatch`);
+      const {hash,sig,...core}=ev;
+      const expected='sha256:'+await sha256hex(concatBytes(enc.encode(jcs(core)),enc.encode(prev??'')));
+      assert(ev.hash===expected,`event ${i+1}: hash mismatch (tampered?)`);
+      prev=ev.hash;
+    }
+  });
+
+  await step('3 signatures', async ()=>{
+    assert(wk.spec_version==='0.1'&&Array.isArray(wk.keys)&&wk.keys.length>=1,'bad well-known document');
+    const keys=[];
+    for (const k of wk.keys.filter(k=>k.alg==='ed25519')){
+      const raw=b64ToBytes(k.pub);
+      assert(raw.length===32,`key ${k.kid}: pub must be raw 32 bytes`);
+      keys.push(await crypto.subtle.importKey('raw',raw,{name:'Ed25519'},false,['verify']));
+    }
+    assert(keys.length>=1,'no usable ed25519 keys');
+    for (const [i,ev] of receipt.events.entries()){
+      const sig=b64ToBytes(ev.sig.slice('ed25519:'.length));
+      let ok=false;
+      for (const key of keys){ if (await crypto.subtle.verify({name:'Ed25519'},key,sig,enc.encode(ev.hash))) { ok=true; break; } }
+      assert(ok,`event ${i+1}: signature does not verify against any issuer key`);
+    }
+    return `${wk.keys.length} issuer key(s)`;
+  });
+
+  await step('4 state machine', async ()=>{
+    let state=null;
+    for (const [i,ev] of receipt.events.entries()){
+      const bad=()=>{ throw new Error(`event ${i+1}: illegal transition ${state} → ${ev.type}`); };
+      switch(ev.type){
+        case 'intent.quote_requested': if(state!==null) bad(); state='inquired'; break;
+        case 'commitment.charged': if(state!=='inquired') bad(); state='charged'; break;
+        case 'commitment.reserved': if(state!=='charged') bad(); state='reserved'; break;
+        case 'commitment.redeemed': if(state!=='reserved') bad(); state='redeemed'; break;
+        case 'commitment.released': if(state!=='reserved') bad(); state='charged'; break;
+        default: bad();
+      }
+    }
+    effectiveState=state;
+    return `final state: ${state}`;
+  });
+
+  await step('5 effective state', async ()=>{
+    if (effectiveState!=='redeemed' && Date.parse(receipt.commitment.expires_at)<Date.now())
+      effectiveState=`${effectiveState} (EXPIRED)`;
+    return effectiveState;
+  });
+
+  renderVerdict(!failed, failed?'INVALID (fail-closed)':`VALID — effective state: ${effectiveState}`);
+}
+
+document.getElementById('go').addEventListener('click', verify);
+async function loadDemo(file){
+  try {
+    const [r, w] = await Promise.all([
+      fetch('examples/'+file).then(x=>{ if(!x.ok) throw new Error('HTTP '+x.status); return x.text(); }),
+      fetch('examples/well-known.json').then(x=>{ if(!x.ok) throw new Error('HTTP '+x.status); return x.text(); }),
+    ]);
+    document.getElementById('receipt').value=r;
+    document.getElementById('wk').value=w;
+    await verify();
+  } catch(e){ alert('Demo files not available here ('+e.message+') — paste JSON manually.'); }
+}
+document.getElementById('demo-ok').addEventListener('click', ()=>loadDemo('happy-path.json'));
+document.getElementById('demo-bad').addEventListener('click', ()=>loadDemo('tampered.json'));
+document.getElementById('fetchkey').addEventListener('click', async ()=>{
+  try {
+    const receipt=JSON.parse(document.getElementById('receipt').value);
+    const res=await fetch(receipt.issuer.key_url,{mode:'cors'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    document.getElementById('wk').value=JSON.stringify(await res.json(),null,2);
+  } catch(e){
+    alert('Could not fetch key_url ('+e.message+').\nCORS or offline — paste the issuer\'s /.well-known/symbolon.json manually instead.');
+  }
+});
+</script>
+</body>
+</html>
