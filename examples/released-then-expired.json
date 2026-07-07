@@ -16,6 +16,7 @@
     "amount_decimal": "1000.00",
     "currency": "TWD",
     "terms_url": "https://tours.example.tw/planning-fee-terms",
+    "terms_digest": "sha256:32fc9aeae474aba80f40d20a062f1721a4f50b462eeaa3c7b551c4592cc60f62",
     "expires_at": "2026-06-01T00:00:00Z",
     "payment_reference": {
       "type": "manual_transfer",
@@ -29,44 +30,48 @@
       "at": "2026-03-01T03:00:00Z",
       "actor": "agent",
       "prev_hash": null,
+      "kid": "2026-01",
       "detail": {
         "inquiry_ref": "inq_045"
       },
-      "hash": "sha256:52714c91a13519addd2a69ee1b196062c7b2f9b03a3b5064f72d9a65dc5b5583",
-      "sig": "ed25519:V65AAAwShhkXYhFp05W1Q142S6Cqo9wqDE5lXgSVLtPg+p9VpH5Ayx+gyb/pRj4NmnIwkLczTavP9pUPP+0BCw=="
+      "hash": "sha256:87567578d27122807afa58d43cb74816a6d13a0ee3b56db5f0c545df60dc1153",
+      "sig": "ed25519:s0UhkuHvovSfcW+0QZpFYxIy9XV1FLOAlnO4NR9vhIIpLmcdzZvI+rN0BXX7epS+vkz8SET/KfQLPQyaVhdRDA=="
     },
     {
       "seq": 2,
       "type": "commitment.charged",
       "at": "2026-03-02T05:00:00Z",
       "actor": "issuer",
-      "prev_hash": "sha256:52714c91a13519addd2a69ee1b196062c7b2f9b03a3b5064f72d9a65dc5b5583",
-      "hash": "sha256:dc1fe0a61d2d5873a1fc606bf1d9f2beb60d8a0c3ba0875e646964ef50edea51",
-      "sig": "ed25519:/xSl+NMoIpbfG86JnJTj5vp5oynr5dYXv3eKNSve12P1dSMzFL11taWUmN0X8Xk08p/wSwkzHzGAECPziwf4Cw=="
+      "prev_hash": "sha256:87567578d27122807afa58d43cb74816a6d13a0ee3b56db5f0c545df60dc1153",
+      "kid": "2026-01",
+      "hash": "sha256:1937690685baf6b4a911abedcfb12622732fda2253e4c97cc2eac1518397963e",
+      "sig": "ed25519:hdrswGCfvNwENyIt4mkYFd5f4Rqlbx10lHCzBchbEt5Xy9o0mef6I/cMtRwhItaWbfQd+dbPyITkbBRjJibdBA=="
     },
     {
       "seq": 3,
       "type": "commitment.reserved",
       "at": "2026-03-10T09:00:00Z",
       "actor": "issuer",
-      "prev_hash": "sha256:dc1fe0a61d2d5873a1fc606bf1d9f2beb60d8a0c3ba0875e646964ef50edea51",
+      "prev_hash": "sha256:1937690685baf6b4a911abedcfb12622732fda2253e4c97cc2eac1518397963e",
+      "kid": "2026-01",
       "detail": {
         "quote_ref": "Q-20260310-1002"
       },
-      "hash": "sha256:f73b320a399ef3f63e0e4a03cd40e7fe38d48942720a69987a80282fb8aafae1",
-      "sig": "ed25519:BP27ehpZRQqulf5AOD/YedBv/ko2d8Xnk9JXogMmNVzN8SzRblAPUpixj+xKy8RuEKpfN3t1GV8syGlrcfacCA=="
+      "hash": "sha256:001b81db02260c66b724a5f92427a0a18db49c57b9d5003da84bfedd9eed90ce",
+      "sig": "ed25519:C88rXKfcFfEWNIUTy9vsGcI+Royb2ESV93YzQpWFSrRNzQ3ZJ42Bumd47YqFykY/qYi2HzAESr0oFFO3FZnSAQ=="
     },
     {
       "seq": 4,
       "type": "commitment.released",
       "at": "2026-03-12T01:00:00Z",
       "actor": "issuer",
-      "prev_hash": "sha256:f73b320a399ef3f63e0e4a03cd40e7fe38d48942720a69987a80282fb8aafae1",
+      "prev_hash": "sha256:001b81db02260c66b724a5f92427a0a18db49c57b9d5003da84bfedd9eed90ce",
+      "kid": "2026-01",
       "detail": {
         "reason": "quote declined"
       },
-      "hash": "sha256:d127bb4414adf38f8d70dc7541fdba6b591f122b894216f8351c5822129b095d",
-      "sig": "ed25519:wVp6y2qon1/jatRk9ONXx9PiW5XfHZDGiyRzHZgFBMkHkOMjJaG5RgXKj9BNmHIW5pxjSiQ23U3gikJv9F1SBQ=="
+      "hash": "sha256:24ff94b1c6932f1c0d0f26248bb2015347ab5f8915c11f006465117bd3b61ae8",
+      "sig": "ed25519:f/VJG3EEtQ53g2PidsL/FAQLKxO3vz0KpTHVPTPH8l82aXqVRqhRHJLCzJn5foGIuI8cOYJnFLfBi9Ug3dGrCw=="
     }
   ]
 }

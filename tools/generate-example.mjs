@@ -32,7 +32,8 @@ const wellKnown = {
   keys: [{ kid: '2026-01', alg: 'ed25519', pub: rawPub.toString('base64') }],
 };
 
-// --- receipt builder ---
+// --- receipt builder (spec §4: context binding + domain separation + kid) ---
+const KID = '2026-01';
 function buildReceipt({ receipt_id, expires_at, eventSpecs }) {
   const receipt = {
     spec_version: '0.1',
@@ -49,21 +50,21 @@ function buildReceipt({ receipt_id, expires_at, eventSpecs }) {
       amount_decimal: '1000.00',
       currency: 'TWD',
       terms_url: 'https://tours.example.tw/planning-fee-terms',
+      terms_digest: 'sha256:' + sha256hex(Buffer.from('Planning fee terms v1: non-refundable; redeemable against any formal quote for the same inquiry within validity.', 'utf8')),
       expires_at,
       payment_reference: { type: 'manual_transfer', ref: 'TXN-20260707-001' },
     },
     events: [],
   };
+  const { events: _omit, ...receiptCore } = receipt;
+  const context = sha256hex(Buffer.from('symbolon:v0.1:receipt\n' + jcs(receiptCore), 'utf8'));
   let prev = null;
   eventSpecs.forEach((e, i) => {
-    const ev = { seq: i + 1, type: e.type, at: e.at, actor: e.actor, prev_hash: prev };
-    if (e.detail) ev.detail = e.detail;
-    const hash = 'sha256:' + sha256hex(Buffer.concat([
-      Buffer.from(jcs(ev), 'utf8'),
-      Buffer.from(prev ?? '', 'utf8'),
-    ]));
-    const sig = 'ed25519:' + edSign(null, Buffer.from(hash, 'utf8'), privateKey).toString('base64');
-    receipt.events.push({ ...ev, hash, sig });
+    const core = { seq: i + 1, type: e.type, at: e.at, actor: e.actor, prev_hash: prev, kid: KID };
+    if (e.detail) core.detail = e.detail;
+    const hash = 'sha256:' + sha256hex(Buffer.from('symbolon:v0.1:event\n' + context + '\n' + jcs(core), 'utf8'));
+    const sig = 'ed25519:' + edSign(null, Buffer.from('symbolon:v0.1:sig\n' + hash, 'utf8'), privateKey).toString('base64');
+    receipt.events.push({ ...core, hash, sig });
     prev = hash;
   });
   return receipt;
@@ -91,10 +92,12 @@ const released = buildReceipt({
   ],
 });
 
-// tampered: mutate an event's detail but keep original hashes/sigs → MUST fail verification
+// tampered: the header attack the 2026-07-07 security review caught —
+// alter commitment.amount_decimal but keep all original hashes/sigs.
+// Under the pre-review scheme this VERIFIED (events[] didn't cover the header);
+// with receipt-context binding it MUST fail at the hash-chain step.
 const tampered = JSON.parse(JSON.stringify(happy));
-tampered.receipt_id = 'sym_tampered1';
-tampered.events[2].detail.quote_ref = 'Q-20260715-9999';
+tampered.commitment.amount_decimal = '9000.00';
 
 writeFileSync(join(out, 'well-known.json'), JSON.stringify(wellKnown, null, 2) + '\n');
 writeFileSync(join(out, 'happy-path.json'), JSON.stringify(happy, null, 2) + '\n');

@@ -119,11 +119,12 @@ async function verify(){
     assert(typeof iss.name==='string'&&iss.name.length>=1,'issuer.name required');
     assert(/^https:\/\//.test(iss.id??''),'issuer.id must be https URL');
     assert(/^https:\/\//.test(iss.key_url??''),'issuer.key_url must be https URL');
-    assert(new URL(iss.key_url).origin===new URL(iss.id).origin,'key_url must be same-origin with issuer.id');
+    assert(iss.key_url===new URL(iss.id).origin+'/.well-known/symbolon.json','key_url must be the fixed well-known path on issuer.id origin');
     assert(typeof receipt.principal_ref==='string'&&receipt.principal_ref.length>=1,'principal_ref required');
     assert(receipt.agent?.on_behalf_of==='principal','agent.on_behalf_of must be "principal"');
     const c=receipt.commitment??{};
-    assert(/^[0-9]+(\.[0-9]{1,4})?$/.test(c.amount_decimal??''),'bad amount_decimal');
+    assert(/^[0-9]+(\.[0-9]{1,4})?$/.test(c.amount_decimal??'')&&parseFloat(c.amount_decimal)>0,'bad amount_decimal (must be positive)');
+    if (c.terms_digest!==undefined) assert(/^sha256:[0-9a-f]{64}$/.test(c.terms_digest),'bad terms_digest');
     assert(/^[A-Z]{3}$/.test(c.currency??''),'bad currency');
     assert(!Number.isNaN(Date.parse(c.expires_at??'')),'bad expires_at');
     assert(typeof c.payment_reference?.type==='string'&&typeof c.payment_reference?.ref==='string','payment_reference {type, ref} required');
@@ -134,50 +135,57 @@ async function verify(){
       assert(['agent','principal','issuer'].includes(ev.actor),`event ${i+1}: bad actor`);
       assert(!Number.isNaN(Date.parse(ev.at??'')),`event ${i+1}: bad at`);
       assert(i===0?ev.prev_hash===null:/^sha256:[0-9a-f]{64}$/.test(ev.prev_hash??''),`event ${i+1}: bad prev_hash`);
+      assert(typeof ev.kid==='string'&&ev.kid.length>=1&&ev.kid.length<=64,`event ${i+1}: bad kid`);
       assert(/^sha256:[0-9a-f]{64}$/.test(ev.hash??''),`event ${i+1}: bad hash`);
-      assert(/^ed25519:[A-Za-z0-9+/]+={0,2}$/.test(ev.sig??''),`event ${i+1}: bad sig`);
+      assert(/^ed25519:[A-Za-z0-9+/]{86}==$/.test(ev.sig??''),`event ${i+1}: bad sig`);
+      if(i>0) assert(Date.parse(ev.at)>=Date.parse(receipt.events[i-1].at),`event ${i+1}: timestamp must be non-decreasing`);
     });
     return `${receipt.events.length} events`;
   });
 
   await step('2 hash chain', async ()=>{
+    const {events:_omit,...receiptCore}=receipt;
+    const context=await sha256hex(enc.encode('symbolon:v0.1:receipt\n'+jcs(receiptCore)));
     let prev=null;
     for (const [i,ev] of receipt.events.entries()){
       assert(ev.prev_hash===prev,`event ${i+1}: prev_hash mismatch`);
       const {hash,sig,...core}=ev;
-      const expected='sha256:'+await sha256hex(concatBytes(enc.encode(jcs(core)),enc.encode(prev??'')));
-      assert(ev.hash===expected,`event ${i+1}: hash mismatch (tampered?)`);
+      const expected='sha256:'+await sha256hex(enc.encode('symbolon:v0.1:event\n'+context+'\n'+jcs(core)));
+      assert(ev.hash===expected,`event ${i+1}: hash mismatch (tampered header or event?)`);
       prev=ev.hash;
     }
+    return 'header + events bound';
   });
 
   await step('3 signatures', async ()=>{
     assert(wk.spec_version==='0.1'&&Array.isArray(wk.keys)&&wk.keys.length>=1,'bad well-known document');
-    const keys=[];
+    const keysByKid=new Map();
     for (const k of wk.keys.filter(k=>k.alg==='ed25519')){
       const raw=b64ToBytes(k.pub);
       assert(raw.length===32,`key ${k.kid}: pub must be raw 32 bytes`);
-      keys.push(await crypto.subtle.importKey('raw',raw,{name:'Ed25519'},false,['verify']));
+      keysByKid.set(k.kid, await crypto.subtle.importKey('raw',raw,{name:'Ed25519'},false,['verify']));
     }
-    assert(keys.length>=1,'no usable ed25519 keys');
+    assert(keysByKid.size>=1,'no usable ed25519 keys');
     for (const [i,ev] of receipt.events.entries()){
+      const key=keysByKid.get(ev.kid);
+      assert(key,`event ${i+1}: kid "${ev.kid}" not found in well-known keys`);
       const sig=b64ToBytes(ev.sig.slice('ed25519:'.length));
-      let ok=false;
-      for (const key of keys){ if (await crypto.subtle.verify({name:'Ed25519'},key,sig,enc.encode(ev.hash))) { ok=true; break; } }
-      assert(ok,`event ${i+1}: signature does not verify against any issuer key`);
+      const ok=await crypto.subtle.verify({name:'Ed25519'},key,sig,enc.encode('symbolon:v0.1:sig\n'+ev.hash));
+      assert(ok,`event ${i+1}: signature does not verify against key "${ev.kid}"`);
     }
     return `${wk.keys.length} issuer key(s)`;
   });
 
   await step('4 state machine', async ()=>{
     let state=null;
+    const expiresAt=Date.parse(receipt.commitment.expires_at);
     for (const [i,ev] of receipt.events.entries()){
-      const bad=()=>{ throw new Error(`event ${i+1}: illegal transition ${state} → ${ev.type}`); };
+      const bad=(msg)=>{ throw new Error(`event ${i+1}: ${msg??`illegal transition ${state} → ${ev.type}`}`); };
       switch(ev.type){
         case 'intent.quote_requested': if(state!==null) bad(); state='inquired'; break;
         case 'commitment.charged': if(state!=='inquired') bad(); state='charged'; break;
-        case 'commitment.reserved': if(state!=='charged') bad(); state='reserved'; break;
-        case 'commitment.redeemed': if(state!=='reserved') bad(); state='redeemed'; break;
+        case 'commitment.reserved': if(state!=='charged') bad(); if(Date.parse(ev.at)>expiresAt) bad('reserved after expiry'); state='reserved'; break;
+        case 'commitment.redeemed': if(state!=='reserved') bad(); if(Date.parse(ev.at)>expiresAt) bad('redeemed after expiry'); state='redeemed'; break;
         case 'commitment.released': if(state!=='reserved') bad(); state='charged'; break;
         default: bad();
       }

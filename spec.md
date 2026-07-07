@@ -33,11 +33,13 @@ intent.quote_requested → commitment.charged → commitment.reserved → commit
 ```
 
 Rules:
-- `commitment.charged` requires a prior `intent.quote_requested`.
+- The first event MUST be `intent.quote_requested`, and it MUST appear exactly once.
+- `commitment.charged` requires state `inquired`, and MUST appear exactly once.
 - `commitment.reserved` requires state `charged` (initial or after a release).
 - `commitment.redeemed` requires state `reserved`. Terminal.
 - `commitment.released` is legal from `reserved` (quote declined/voided); the commitment returns to state `charged` and MAY be reserved again before expiry.
-- **Expiry is dynamic**: verifiers MUST treat `commitment.expires_at < now` as expired unless the receipt is already `redeemed`. No `expired` event exists.
+- Event timestamps (`at`) MUST be non-decreasing in `seq` order.
+- **Expiry**: `commitment.reserved` and `commitment.redeemed` events whose `at` is after `commitment.expires_at` make the receipt invalid. `commitment.released` is legal at any time (a commitment must always be releasable). Additionally, expiry is dynamic: verifiers MUST report state `expired` when `expires_at <= now` unless the receipt is `redeemed`. No `expired` event exists.
 - No `disputed` state in v0.1.
 - Any illegal transition ⇒ the entire receipt is invalid. Verifiers MUST fail closed.
 
@@ -61,6 +63,7 @@ A receipt is one JSON object. All numbers are integers; all monetary values are 
     "amount_decimal": "1000.00",
     "currency": "TWD",
     "terms_url": "https://tours.example.tw/planning-fee-terms",
+    "terms_digest": "sha256:…",
     "expires_at": "2026-09-05T00:00:00Z",
     "payment_reference": { "type": "manual_transfer", "ref": "TXN-20260707-001" }
   },
@@ -72,6 +75,7 @@ A receipt is one JSON object. All numbers are integers; all monetary values are 
       "actor": "agent",
       "detail": { "inquiry_ref": "inq_123" },
       "prev_hash": null,
+      "kid": "2026-01",
       "hash": "sha256:…",
       "sig": "ed25519:…"
     }
@@ -81,17 +85,25 @@ A receipt is one JSON object. All numbers are integers; all monetary values are 
 
 Field notes:
 - **`principal_ref`** — an opaque issuer-side reference. No PII in the receipt, not even hashes (hashed phone numbers are brute-forceable). The issuer holds the mapping privately.
-- **`amount_decimal`** — decimal string, non-negative, `^[0-9]+(\.[0-9]{1,4})?$`. One receipt = one commitment = one currency; redeemed in full or released in full. No partial accounting in v0.1.
-- **`payment_reference`** — `{type, ref, uri?, digest?}`, an open pointer to the money rail (`manual_transfer`, `card`, `acp_mandate`, `ap2_mandate`, …). Symbolon never validates the rail — a receipt layer that validates payment rails gets captured by them.
+- **`amount_decimal`** — decimal string, strictly positive, `^[0-9]+(\.[0-9]{1,4})?$`. One receipt = one commitment = one currency (ISO 4217); redeemed in full or released in full. No partial accounting in v0.1.
+- **`terms_url` / `terms_digest`** — `terms_digest` (optional but RECOMMENDED) is `"sha256:" + hex(SHA-256(terms document bytes))` at issuance time, so the issuer cannot silently rewrite the terms page later.
+- **`payment_reference`** — `{type, ref, uri?, digest?}`, an open pointer to the money rail (`manual_transfer`, `card`, `acp_mandate`, `ap2_mandate`, `x402`, `l402`, …). Symbolon never validates the rail — a receipt layer that validates payment rails gets captured by them.
 - **`events[].actor`** — one of `agent`, `principal`, `issuer`.
 - **`events[].seq`** — 1-based, strictly consecutive, matching array order.
+- **`events[].kid`** — the issuer key id (from the well-known document) that signed this event; verifiers use it to select the key (no trial-and-error) and it survives key rotation.
+- **Duplicate JSON member names** anywhere in a receipt make it invalid; implementations SHOULD reject them (I-JSON, RFC 7493).
 
 ## 4. Integrity & verification
 
 - **Canonicalization**: JCS (RFC 8785). Because the schema forbids floats, implementations only need the sorted-keys + UTF-8 subset of RFC 8785.
-- **Hash chain**: for each event, `hash = "sha256:" + hex( SHA-256( JCS(event minus hash,sig) || (prev_hash ?? "") ) )`, where `prev_hash` of event 1 is `null` and of event *n* is the `hash` of event *n−1*. Editing, deleting, or reordering any event breaks every subsequent hash.
-- **Signature**: `sig = "ed25519:" + base64( Ed25519_sign( issuer_private_key, hash_string_utf8 ) )`. The issuer signs each event's `hash` string.
-- **Key discovery**: the issuer publishes public keys at `https://<issuer domain>/.well-known/symbolon.json` — same origin as `issuer.id`:
+- **Receipt context binding**: let `receipt_core` be the receipt object **without** the `events` member. Then
+  `context = hex( SHA-256( UTF8( "symbolon:v0.1:receipt\n" + JCS(receipt_core) ) ) )`.
+  Every event hash commits to `context`, so altering **any** header field — amount, currency, expiry, terms, issuer, agent — breaks every event hash.
+- **Hash chain**: for each event, with `core` = the event without `hash` and `sig` (note `core` includes `prev_hash` and `kid`):
+  `hash = "sha256:" + hex( SHA-256( UTF8( "symbolon:v0.1:event\n" + context + "\n" + JCS(core) ) ) )`,
+  where `prev_hash` of event 1 is `null` and of event *n* is the `hash` of event *n−1*. Editing, deleting, or reordering any event breaks every subsequent hash. The `symbolon:v0.1:…` prefixes are domain separators: a Symbolon digest can never collide with another protocol's use of the same data.
+- **Signature**: `sig = "ed25519:" + base64( Ed25519_sign( issuer_key[kid], UTF8( "symbolon:v0.1:sig\n" + hash ) ) )`. The signing key MUST be the well-known key whose id equals the event's `kid`.
+- **Key discovery**: the issuer publishes public keys at the **fixed path** `https://<origin of issuer.id>/.well-known/symbolon.json`; `key_url` MUST equal exactly that URL. Verifiers MUST NOT follow cross-origin redirects when fetching it. A locally supplied copy of the well-known document MUST be labelled with the origin it was retrieved from:
 
 ```json
 { "spec_version": "0.1",
@@ -99,17 +111,21 @@ Field notes:
 ```
 
 - **Verifier procedure** (fail closed at every step):
-  1. Validate the receipt against the JSON Schema.
-  2. Recompute the hash chain; reject on any mismatch.
-  3. Obtain the issuer key (fetch `key_url`, which MUST be same-origin with `issuer.id`; or accept a locally supplied copy of the well-known document) and verify every `sig`.
-  4. Replay the state machine (§2); reject illegal transitions.
+  1. Validate the receipt against the JSON Schema (including `key_url` = fixed well-known path on `issuer.id`'s origin).
+  2. Recompute `context` and the hash chain; reject on any mismatch.
+  3. Obtain the issuer keys (fetch `key_url` without cross-origin redirects, or accept a locally supplied copy) and verify every `sig` with the key named by that event's `kid`.
+  4. Replay the state machine (§2), including timestamp monotonicity and expiry rules; reject illegal transitions.
   5. Report the effective state, including dynamic expiry.
 
 Trust anchor = the issuer's domain (DNS/TLS). Nothing else. Deliberately sufficient for v0.1.
 
 ## 5. Deferred by design (not in v0.1)
 
-Disputes, `expired` events, discovery/endpoints, multi-currency, partial redemption, payment-rail validation, PII hashing schemes, revocation lists, agent identity attestation. The spec stays robots.txt-sized or it dies.
+Disputes, `expired` events, discovery/endpoints, multi-currency, partial redemption, payment-rail validation, PII hashing schemes, revocation lists, agent identity attestation (DID/VC envelopes), key transparency. The spec stays robots.txt-sized or it dies.
+
+## 5a. Relationship to neighbouring protocols
+
+Symbolon is payment-rail agnostic and deliberately smaller than its neighbours: W3C Verifiable Credentials answer "who is this party?" (a future envelope, not a dependency); Google AP2 / OpenAI-Stripe ACP answer "may the agent pay?" (reference their mandates via `payment_reference.type`); x402 / L402 answer "how does the machine pay?" (likewise a `payment_reference.type`). Symbolon answers the question none of them do: **"what was committed before payment, and what happened to that commitment?"**
 
 ## 6. Conformance
 
@@ -127,3 +143,8 @@ tools/generate-example.mjs   dev tool: keypair + signed example receipts
 tools/verify.mjs         CLI verifier (same §4 procedure, for CI)
 examples/                worked examples incl. a tampered receipt that must fail
 ```
+
+## Changelog
+
+- **2026-07-07 (b)** — security review (2 independent AI reviewers) before any adopter existed; wire format amended: receipt-context binding (header fields are now covered by every event hash — previously only `events[]` was protected), domain-separated hash & signature payloads, `events[].kid` (key rotation), fixed well-known path + no cross-origin redirects, first-event and exactly-one-`charged` rules, timestamp monotonicity, expiry blocks reserve/redeem but never release, optional `terms_digest`, tightened signature encoding patterns.
+- **2026-07-07 (a)** — initial public draft.

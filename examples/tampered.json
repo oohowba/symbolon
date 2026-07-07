@@ -1,6 +1,6 @@
 {
   "spec_version": "0.1",
-  "receipt_id": "sym_tampered1",
+  "receipt_id": "sym_happy001",
   "issuer": {
     "name": "Formosa Charter Tours Co., Ltd.",
     "id": "https://tours.example.tw",
@@ -13,9 +13,10 @@
     "on_behalf_of": "principal"
   },
   "commitment": {
-    "amount_decimal": "1000.00",
+    "amount_decimal": "9000.00",
     "currency": "TWD",
     "terms_url": "https://tours.example.tw/planning-fee-terms",
+    "terms_digest": "sha256:32fc9aeae474aba80f40d20a062f1721a4f50b462eeaa3c7b551c4592cc60f62",
     "expires_at": "2026-09-05T00:00:00Z",
     "payment_reference": {
       "type": "manual_transfer",
@@ -29,47 +30,51 @@
       "at": "2026-07-07T03:00:00Z",
       "actor": "agent",
       "prev_hash": null,
+      "kid": "2026-01",
       "detail": {
         "inquiry_ref": "inq_123"
       },
-      "hash": "sha256:21d8895d8c3f5aa01a99337ed48c1fa32a0f6871f7ed40999588217073bf99e5",
-      "sig": "ed25519:PbEwX2g53O93eyQoildN1b7oV7PBVsh2/x0G3wZbUL2qXELtzW9aPB2T/jDRIGUV9UAKb5mPXe3Cb/oz+e29CQ=="
+      "hash": "sha256:8828b98baf3a97e2bfa16aa9c05a2c4eaa07fe537e653f64b404daaa8f2f9daa",
+      "sig": "ed25519:IqK/YpIq72cMhRV0LwkNYODunl9RgbHIgf3P0kAju2a02zKcS8ovKS+1NHZVx1Omcfd/vQjiv2TKi32UH/rhAg=="
     },
     {
       "seq": 2,
       "type": "commitment.charged",
       "at": "2026-07-08T05:30:00Z",
       "actor": "issuer",
-      "prev_hash": "sha256:21d8895d8c3f5aa01a99337ed48c1fa32a0f6871f7ed40999588217073bf99e5",
+      "prev_hash": "sha256:8828b98baf3a97e2bfa16aa9c05a2c4eaa07fe537e653f64b404daaa8f2f9daa",
+      "kid": "2026-01",
       "detail": {
         "note": "planning fee received"
       },
-      "hash": "sha256:8d288585e18bcade4ab0eedee627b86a6f446936e751359371fcb091ba0c5809",
-      "sig": "ed25519:lGu1vpBzrSpwyDm4I0tBRTlgeetD+u4u7Q9GCSE9SpZf7hTXBwQngrZKMWiDtjxdNt/+EZTAt36CB1kvY8wlBg=="
+      "hash": "sha256:fe7b3ad392580c4766fdf36a0be8c9c2c439125f3d40003d03426e0bad311c4d",
+      "sig": "ed25519:1/9LBkiwT77VJdr8gbQ6ZA9gThRhQjwIBe3KhgU8l6Xhtq18LqKz58HtsFFeRKDYqCxJfkpNfhz8LD8RoLZUCg=="
     },
     {
       "seq": 3,
       "type": "commitment.reserved",
       "at": "2026-07-15T09:00:00Z",
       "actor": "issuer",
-      "prev_hash": "sha256:8d288585e18bcade4ab0eedee627b86a6f446936e751359371fcb091ba0c5809",
+      "prev_hash": "sha256:fe7b3ad392580c4766fdf36a0be8c9c2c439125f3d40003d03426e0bad311c4d",
+      "kid": "2026-01",
       "detail": {
-        "quote_ref": "Q-20260715-9999"
+        "quote_ref": "Q-20260715-1001"
       },
-      "hash": "sha256:60e21c269b21b6262834f26156b669779eeeb18752ee48e27463d38eaee41074",
-      "sig": "ed25519:MUKEuSE9bYeqACnHLIkRvbiL3lgBzYpuUhLUqyBfXgcPVdKuIUVf9rmwIJPyXoV5GIsXjtvpNzlJll4waimTDA=="
+      "hash": "sha256:e89f315d14f73ab6fdf304c7ca9c6d08d6c7eee176a1342d1997fe0385eaceaf",
+      "sig": "ed25519:I+ZioMKdNFbssqB24Y5yQvV08czKLkfS8UCyKqyED9xQiD02eChdzgRfsBQ0r1gRrFWo1VxTB1gtEc3nRT2sBg=="
     },
     {
       "seq": 4,
       "type": "commitment.redeemed",
       "at": "2026-07-20T02:00:00Z",
       "actor": "issuer",
-      "prev_hash": "sha256:60e21c269b21b6262834f26156b669779eeeb18752ee48e27463d38eaee41074",
+      "prev_hash": "sha256:e89f315d14f73ab6fdf304c7ca9c6d08d6c7eee176a1342d1997fe0385eaceaf",
+      "kid": "2026-01",
       "detail": {
         "order_ref": "Q-20260715-1001"
       },
-      "hash": "sha256:845a42e93893364a81c2d405b0d31afc531f37881c57d2c36bfaa47f386c38b5",
-      "sig": "ed25519:PzA7pKJSQ5QvkDW+qmTqbP5cPT+5PcEVaGFldG1IIquHhGnergnLl70IXs0Edbd7Y86eqTaMp/MK3B2U6u1KBQ=="
+      "hash": "sha256:57d2dc0c11539e206743ba655cc96f94277e2a925b0b0f917aed158f525c7b24",
+      "sig": "ed25519:kg3irxgXaks9D1aeONhVZDajlaYjpz0sdlysUwneA0H6cD6Bcl2n/gYJX+W5yZHPYKPkejkd2ACvj0bdosvXBQ=="
     }
   ]
 }

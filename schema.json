@@ -34,9 +34,10 @@
       "additionalProperties": false,
       "required": ["amount_decimal", "currency", "terms_url", "expires_at", "payment_reference"],
       "properties": {
-        "amount_decimal": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]{1,4})?$" },
+        "amount_decimal": { "type": "string", "pattern": "^(?!0+(\\.0+)?$)[0-9]+(\\.[0-9]{1,4})?$" },
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
         "terms_url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "terms_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "expires_at": { "type": "string", "format": "date-time" },
         "payment_reference": {
           "type": "object",
@@ -58,7 +59,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["seq", "type", "at", "actor", "prev_hash", "hash", "sig"],
+        "required": ["seq", "type", "at", "actor", "prev_hash", "kid", "hash", "sig"],
         "properties": {
           "seq": { "type": "integer", "minimum": 1 },
           "type": {
@@ -80,8 +81,9 @@
           "prev_hash": {
             "oneOf": [ { "type": "null" }, { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" } ]
           },
+          "kid": { "type": "string", "minLength": 1, "maxLength": 64 },
           "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-          "sig": { "type": "string", "pattern": "^ed25519:[A-Za-z0-9+/]+={0,2}$" }
+          "sig": { "type": "string", "pattern": "^ed25519:[A-Za-z0-9+/]{86}==$" }
         }
       }
     }
