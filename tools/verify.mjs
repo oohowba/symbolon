@@ -143,5 +143,6 @@ step('5 effective state', () => {
 for (const [name, verdict, note] of steps) {
   console.log(`${verdict.padEnd(4)} ${name}${note ? ' — ' + note : ''}`);
 }
+console.log(`NOTE agent identity — ${receipt.agent?.id ?? '(none)'}: self-asserted, not attested; not authentication.`);
 console.log(failed ? '\nRESULT: INVALID (fail-closed)' : `\nRESULT: VALID — effective state: ${effectiveState}`);
 process.exit(failed ? 1 : 0);

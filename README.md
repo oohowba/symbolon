@@ -16,7 +16,7 @@ Symbolon standardizes **the receipt of that commitment**: who committed what, on
 
 ## The boundary (most important sentence)
 
-> Symbolon verifies **issuer-attested receipt history** — not payment finality, not customer identity, not legal enforceability, not dispute outcomes.
+> Symbolon verifies **issuer-attested receipt history** — not payment finality, not customer or agent identity, not legal enforceability, not dispute outcomes.
 
 Money moves on whatever rails the parties already use (bank transfer, card, ACP / AP2 mandates). Symbolon never moves money; it records commitments about it. A receipt layer that validates payment rails gets captured by them — so it doesn't.
 

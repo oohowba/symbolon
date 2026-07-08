@@ -65,7 +65,7 @@
   <div id="steps"></div>
   <div id="verdict"></div>
   <p class="foot">Symbolon v0.1 — verifies issuer-attested receipt history only; not payment finality,
-  identity, enforceability, or disputes. Runs entirely in your browser (WebCrypto); nothing is uploaded.
+  customer or agent identity, enforceability, or disputes. Runs entirely in your browser (WebCrypto); nothing is uploaded.
   Spec: <a href="../spec.md">spec.md</a> · License: CC0</p>
 </div>
 
@@ -200,6 +200,7 @@ async function verify(){
     return effectiveState;
   });
 
+  renderStep('agent identity', 'SKIP', `${receipt.agent?.id ?? '(none)'} — self-asserted, not attested; do not use as authentication`);
   renderVerdict(!failed, failed?'INVALID (fail-closed)':`VALID — effective state: ${effectiveState}`);
 }
 

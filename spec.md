@@ -7,7 +7,7 @@ License: CC0 1.0 — free to implement, no royalties, forever.
 Artifact name: *commitment receipt*. Protocol name: **Symbolon**.
 
 > **Boundary — the most important sentence in this spec:**
-> Symbolon verifies **issuer-attested receipt history** — not payment finality, not customer identity, not legal enforceability, not dispute outcomes.
+> Symbolon verifies **issuer-attested receipt history** — not payment finality, not customer or agent identity, not legal enforceability, not dispute outcomes.
 
 ---
 
@@ -88,6 +88,7 @@ Field notes:
 - **`amount_decimal`** — decimal string, strictly positive, `^[0-9]+(\.[0-9]{1,4})?$`. One receipt = one commitment = one currency (ISO 4217); redeemed in full or released in full. No partial accounting in v0.1.
 - **`terms_url` / `terms_digest`** — `terms_digest` (optional but RECOMMENDED) is `"sha256:" + hex(SHA-256(terms document bytes))` at issuance time, so the issuer cannot silently rewrite the terms page later.
 - **`payment_reference`** — `{type, ref, uri?, digest?}`, an open pointer to the money rail (`manual_transfer`, `card`, `acp_mandate`, `ap2_mandate`, `x402`, `l402`, …). Symbolon never validates the rail — a receipt layer that validates payment rails gets captured by them.
+- **`agent.id`** — a **self-asserted, descriptive** label (e.g. `urn:agent:claude`). It is NOT authenticated: anyone can write any value, and the issuer's signature does not vouch for it. Verifiers MUST treat `agent.id` as descriptive only and MUST NOT use it as authentication, for settlement, ranking, reputation, or profit-sharing. Verifying *which* agent acted is the job of a future, optional attestation extension (see §5).
 - **`events[].actor`** — one of `agent`, `principal`, `issuer`.
 - **`events[].seq`** — 1-based, strictly consecutive, matching array order.
 - **`events[].kid`** — the issuer key id (from the well-known document) that signed this event; verifiers use it to select the key (no trial-and-error) and it survives key rotation.
@@ -121,7 +122,7 @@ Trust anchor = the issuer's domain (DNS/TLS). Nothing else. Deliberately suffici
 
 ## 5. Deferred by design (not in v0.1)
 
-Disputes, `expired` events, discovery/endpoints, multi-currency, partial redemption, payment-rail validation, PII hashing schemes, revocation lists, agent identity attestation (DID/VC envelopes), key transparency. The spec stays robots.txt-sized or it dies.
+Disputes, `expired` events, discovery/endpoints, multi-currency, partial redemption, payment-rail validation, PII hashing schemes, revocation lists, agent identity attestation (a reserved, backward-compatible `agent_attestation` extension — most likely an agent **co-signature** where `agent.id` binds to the fingerprint of the agent's own key — to be added **only when** an ecosystem actually starts using `agent.id` for settlement, ranking, reputation, or profit-sharing; DID/VC envelopes remain a later option), key transparency. The spec stays robots.txt-sized or it dies.
 
 ## 5a. Relationship to neighbouring protocols
 
